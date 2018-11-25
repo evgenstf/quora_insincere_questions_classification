@@ -1,0 +1,9 @@
+{
+  "data_provider": {
+    "x_known": "../qdata/raw/simple_csv.csv",
+    "y_known": "../qdata/raw/simple_csv.csv",
+    "x_to_predict": "../qdata/raw/simple_csv.csv",
+    "train_part": 0.25,
+    "known_using_part": 0.25
+  }
+}
