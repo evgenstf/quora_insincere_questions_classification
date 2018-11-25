@@ -1,8 +1,8 @@
 {
   "data_provider": {
-    "x_known": "../qdata/raw/train.csv",
-    "y_known": "../qdata/raw/train.csv",
-    "x_to_predict": "../qdata/raw/test.csv",
+    "x_known": "../input/train.csv",
+    "y_known": "../input/train.csv",
+    "x_to_predict": "../input/test.csv",
     "known_using_part" : 1,
     "train_part": 0.99999999999
   },
@@ -16,5 +16,5 @@
   "model": {
     "name": "linear_svc"
   },
-  "answer_file": "answer.csv"
+  "answer_file": "submission.csv"
 }

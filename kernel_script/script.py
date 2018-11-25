@@ -57,9 +57,8 @@ def mape_score(y_data, prediction):
 
 def ratio_score(y_expected, y_predicted):
     return roc_auc_score(y_expected[:len(y_predicted)], y_predicted)
-import sys
-sys.path.append("../base")
-from common import *
+#----------DataProvider----------
+
 from sklearn.model_selection import train_test_split
 from random import shuffle
 import pandas as pd
@@ -102,32 +101,7 @@ class DataProvider:
         )
 
 
-import sys
-sys.path.append("../../base")
-from common import *
-
-class DummyXTransformer:
-    def __init__(self, config):
-        self.log = logging.getLogger("DummyXTransformer")
-        self.log.info("x_transformer config:", config)
-        self.config = config
-        self.log.info("inited")
-
-    def load_train_data(self, x_train, y_train):
-        self.log.info("load x_train size: {0} y_train size: {1}".format(len(x_train), len(y_train)))
-        self.x_train = x_train
-        self.y_train = y_train
-        self.log.info("loaded")
-
-    def transform(self, x_data):
-        self.log.info("transform x_data size: {0}".format(len(x_data)))
-        result = x_data
-        self.log.info("transformed")
-        return result
-import sys
-sys.path.append("../../base")
-from common import *
-import string
+#----------TfidfXTransformer----------
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -168,12 +142,7 @@ class TfidfXTransformer:
 
     def features(self):
         return self.vectorizer.get_feature_names()
-import sys
-sys.path.append("../../base")
-from common import *
-
-
-
+#----------x_transformer_by_config----------
 
 def x_transformer_by_config(config):
     x_transormer_config = config["x_transformer"]
@@ -184,31 +153,7 @@ def x_transformer_by_config(config):
         return TfidfXTransformer(x_transormer_config)
     logging.fatal("unknown x transformer name: {0}".format(name))
     exit(1)
-import sys
-sys.path.append("../../base")
-from common import *
-
-class DummyModel:
-    def __init__(self, config):
-        self.log = logging.getLogger("SkLearnCountVectorizerModel")
-        self.log.info("model config:", config)
-        self.config = config
-        self.log.info("inited")
-
-    def load_train_data(self, x_train, y_train):
-        self.log.info("load x_train size: {0} y_train size: {1}".format(x_train.shape[0], len(y_train)))
-        self.x_train = x_train
-        self.y_train = y_train
-        self.log.info("loaded")
-
-    def predict(self, x_to_predict):
-        self.log.info("predict x_to_predict size: {0}".format(x_to_predict.shape[0]))
-        result = [1]
-        self.log.info("predicted")
-        return result
-import sys
-sys.path.append("../../base")
-from common import *
+#----------LinearSVCModel----------
 
 from sklearn.feature_extraction import text
 from sklearn.svm import LinearSVC
@@ -238,12 +183,7 @@ class LinearSVCModel:
 
     def weights(self):
         return [0]
-import sys
-sys.path.append("../../base")
-from common import *
-
-
-
+#----------model_by_config----------
 
 def model_by_config(config):
     model_config = config["model"]
@@ -253,20 +193,30 @@ def model_by_config(config):
     if (name == "linear_svc"):
         return LinearSVCModel(model_config)
     logging.fatal("unknown model name: {0}".format(name))
-import sys
-sys.path.append("../base")
-sys.path.append("../data_provider")
-sys.path.append("../x_transformer")
-sys.path.append("../model")
-
-from common import *
-from data_provider import *
-from x_transformer_by_config import *
-from model_by_config import *
-
-if (len(sys.argv) < 2):
-    print("Usage: ./example.py <config>")
-    exit()
+#----------config----------
+config = json.loads("""
+{
+  "data_provider": {
+    "x_known": "../input/train.csv",
+    "y_known": "../input/train.csv",
+    "x_to_predict": "../input/test.csv",
+    "known_using_part" : 1,
+    "train_part": 0.99999999999
+  },
+  "x_transformer": {
+    "name": "tfidf",
+    "min_df": 0,
+    "max_df": 0.9,
+    "ngram_range" : [2, 2],
+    "max_features": 100000000
+  },
+  "model": {
+    "name": "linear_svc"
+  },
+  "answer_file": "answer.csv"
+}
+""")
+#----------Launcher----------
 
 def make_prediction(config):
     data_provider = DataProvider(config["data_provider"])
@@ -281,8 +231,6 @@ def make_prediction(config):
 
 log = logging.getLogger("Launcher")
 
-config_file = open(sys.argv[1], 'r')
-config = json.load(config_file)
 log.info("launcher config: {0}".format(config))
 
 prediction = make_prediction(config)
@@ -292,3 +240,4 @@ answer_file.write("Id,Probability\n")
 
 for i in range(len(prediction)):
     answer_file.write("%s,%s\n" % (i + 1, prediction[i]))
+

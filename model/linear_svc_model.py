@@ -2,6 +2,8 @@ import sys
 sys.path.append("../../base")
 from common import *
 
+#----------LinearSVCModel----------
+
 from sklearn.feature_extraction import text
 from sklearn.svm import LinearSVC
 from sklearn.feature_extraction.text import TfidfVectorizer

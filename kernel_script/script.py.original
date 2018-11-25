@@ -243,7 +243,7 @@ sys.path.append("../../base")
 from common import *
 
 
-from linear_svc_model import *
+
 
 def model_by_config(config):
     model_config = config["model"]
@@ -253,6 +253,7 @@ def model_by_config(config):
     if (name == "linear_svc"):
         return LinearSVCModel(model_config)
     logging.fatal("unknown model name: {0}".format(name))
+config_file = open("config.json", 'r')
 import sys
 sys.path.append("../base")
 sys.path.append("../data_provider")

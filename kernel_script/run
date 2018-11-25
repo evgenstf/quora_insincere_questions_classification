@@ -1,3 +1,2 @@
 #!/bin/bash -e
-time python3 script.py config.json
-python3 calc.py
+time python3 script.py
