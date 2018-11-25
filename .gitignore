@@ -1,0 +1,13 @@
+head_x_test.*
+head_y_test.*
+head_x_train.*
+head_y_train.*
+x_test.*
+y_test.*
+x_train.*
+y_train.*
+random_prediction.*
+answer.csv
+__pycache__
+external
+*.txt
