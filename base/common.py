@@ -8,7 +8,8 @@ import sys
 root = logging.getLogger()
 root.setLevel(logging.INFO)
 
-#logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
+
 #ch = logging.StreamHandler(sys.stdout)
 #ch.setLevel(logging.DEBUG)
 #formatter = logging.Formatter('%(asctime)s %(levelname)s[%(name)s] - %(message)s')
