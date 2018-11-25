@@ -11,3 +11,5 @@ answer.csv
 __pycache__
 external
 *.txt
+train.csv
+test.csv
