@@ -1,0 +1,10 @@
+rm script.py
+cat ../base/*.py >> script.py
+cat ../data_provider/*.py >> script.py
+cat ../x_transformer/*.py >> script.py
+cat ../model/*.py >> script.py
+cat ../launcher/launcher.py >> script.py
+sed -i'.original' -e 's/from dummy_x_transformer import \*//g' script.py
+sed -i'.original' -e 's/from tfidf_x_transformer import \*//g' script.py
+sed -i'.original' -e 's/from dummy_model import \*//g' script.py
+sed -i'.original' -e 's/from linear_svc_model import \*//g' script.py
