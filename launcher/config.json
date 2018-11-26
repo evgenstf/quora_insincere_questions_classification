@@ -1,9 +1,9 @@
 {
   "data_provider": {
-    "x_known": "../input/train.csv",
-    "y_known": "../input/train.csv",
-    "x_to_predict": "../input/test.csv",
-    "known_using_part" : 1,
+    "x_known": "../qdata/raw/train.csv",
+    "y_known": "../qdata/raw/train.csv",
+    "x_to_predict": "../qdata/raw/head_test.csv",
+    "known_using_part" : 0.01,
     "train_part": 0.99999999999
   },
   "x_transformer": {

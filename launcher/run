@@ -1,0 +1,2 @@
+#!/bin/bash -e
+time python3 launcher.py config.json

@@ -38,6 +38,7 @@ class TfidfXTransformer:
         self.log.info("loaded")
 
     def transform(self, x_data):
+        self.log.info("transform x_data size: {0}".format(len(x_data)))
         result = self.vectorizer.transform(x_data)
         self.log.info("transformed")
         return result

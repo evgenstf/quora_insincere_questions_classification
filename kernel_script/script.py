@@ -83,9 +83,11 @@ class DataProvider:
         self.log.info("loaded {0} x_known lines".format(len(self.x_known)))
         self.log.info("loaded {0} y_known lines".format(len(self.y_known)))
 
-        x_to_predict_file = open(self.x_to_predict_path, 'r')
-        self.x_to_predict = x_to_predict_file.readlines()
+        x_to_predict_file = pd.read_csv(self.x_to_predict_path)
+        self.x_to_predict_ids = np.array(x_to_predict_file['qid'].values)
+        self.x_to_predict = np.array(x_to_predict_file['question_text'].values)
         self.log.info("loaded {0} x_to_predict lines".format(len(self.x_to_predict)))
+
 
         self.split_known_data_to_train_and_test(config["train_part"])
 
@@ -136,6 +138,7 @@ class TfidfXTransformer:
         self.log.info("loaded")
 
     def transform(self, x_data):
+        self.log.info("transform x_data size: {0}".format(len(x_data)))
         result = self.vectorizer.transform(x_data)
         self.log.info("transformed")
         return result
@@ -176,10 +179,7 @@ class LinearSVCModel:
     def predict(self, x_to_predict):
         self.log.info("predict x_to_predict size: {0}".format(x_to_predict.shape[0]))
         predictions = 1 /(1 + np.exp(self.model.decision_function(-x_to_predict)))
-        probabilities = []
-        for x in predictions:
-            probabilities.append(0 if x > 0.5 else 1)
-        return probabilities
+        return predictions
 
     def weights(self):
         return [0]
@@ -207,37 +207,35 @@ config = json.loads("""
     "name": "tfidf",
     "min_df": 0,
     "max_df": 0.9,
-    "ngram_range" : [2, 2],
+    "ngram_range" : [1, 2],
     "max_features": 100000000
   },
   "model": {
     "name": "linear_svc"
   },
-  "answer_file": "answer.csv"
+  "answer_file": "submission.csv"
 }
 """)
 #----------Launcher----------
-
-def make_prediction(config):
-    data_provider = DataProvider(config["data_provider"])
-    x_transformer = x_transformer_by_config(config)
-    model = model_by_config(config)
-
-    x_transformer.load_train_data(data_provider.x_train, data_provider.y_train)
-    model.load_train_data(x_transformer.transform(data_provider.x_train), data_provider.y_train)
-
-    prediction = model.predict(x_transformer.transform(data_provider.x_to_predict))
-    return prediction
 
 log = logging.getLogger("Launcher")
 
 log.info("launcher config: {0}".format(config))
 
-prediction = make_prediction(config)
+data_provider = DataProvider(config["data_provider"])
+
+x_transformer = x_transformer_by_config(config)
+model = model_by_config(config)
+
+x_transformer.load_train_data(data_provider.x_train, data_provider.y_train)
+model.load_train_data(x_transformer.transform(data_provider.x_train), data_provider.y_train)
+
+prediction = model.predict(x_transformer.transform(data_provider.x_to_predict))
+
 
 answer_file = open(config["answer_file"], 'w')
-answer_file.write("Id,Probability\n")
+answer_file.write("qid,prediction\n")
 
 for i in range(len(prediction)):
-    answer_file.write("%s,%s\n" % (i + 1, prediction[i]))
+    answer_file.write("%s,%s\n" % (data_provider.x_to_predict_ids[i], prediction[i]))
 

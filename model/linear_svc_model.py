@@ -25,10 +25,7 @@ class LinearSVCModel:
     def predict(self, x_to_predict):
         self.log.info("predict x_to_predict size: {0}".format(x_to_predict.shape[0]))
         predictions = 1 /(1 + np.exp(self.model.decision_function(-x_to_predict)))
-        probabilities = []
-        for x in predictions:
-            probabilities.append(0 if x > 0.5 else 1)
-        return probabilities
+        return predictions
 
     def weights(self):
         return [0]

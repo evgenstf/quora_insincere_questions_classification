@@ -28,9 +28,11 @@ class DataProvider:
         self.log.info("loaded {0} x_known lines".format(len(self.x_known)))
         self.log.info("loaded {0} y_known lines".format(len(self.y_known)))
 
-        x_to_predict_file = open(self.x_to_predict_path, 'r')
-        self.x_to_predict = x_to_predict_file.readlines()
+        x_to_predict_file = pd.read_csv(self.x_to_predict_path)
+        self.x_to_predict_ids = np.array(x_to_predict_file['qid'].values)
+        self.x_to_predict = np.array(x_to_predict_file['question_text'].values)
         self.log.info("loaded {0} x_to_predict lines".format(len(self.x_to_predict)))
+
 
         self.split_known_data_to_train_and_test(config["train_part"])
 

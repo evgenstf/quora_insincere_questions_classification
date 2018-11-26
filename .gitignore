@@ -13,3 +13,5 @@ external
 *.txt
 train.csv
 test.csv
+submission.csv
+input
