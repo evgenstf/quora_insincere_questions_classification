@@ -57,6 +57,7 @@ def mape_score(y_data, prediction):
 
 def ratio_score(y_expected, y_predicted):
     return roc_auc_score(y_expected[:len(y_predicted)], y_predicted)
+
 #----------DataProvider----------
 
 from sklearn.model_selection import train_test_split
@@ -103,6 +104,28 @@ class DataProvider:
         )
 
 
+
+#----------DummyXTransformer----------
+
+class DummyXTransformer:
+    def __init__(self, config):
+        self.log = logging.getLogger("DummyXTransformer")
+        self.log.info("x_transformer config:", config)
+        self.config = config
+        self.log.info("inited")
+
+    def load_train_data(self, x_train, y_train):
+        self.log.info("load x_train size: {0} y_train size: {1}".format(len(x_train), len(y_train)))
+        self.x_train = x_train
+        self.y_train = y_train
+        self.log.info("loaded")
+
+    def transform(self, x_data):
+        self.log.info("transform x_data size: {0}".format(len(x_data)))
+        result = x_data
+        self.log.info("transformed")
+        return result
+
 #----------TfidfXTransformer----------
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -145,6 +168,7 @@ class TfidfXTransformer:
 
     def features(self):
         return self.vectorizer.get_feature_names()
+
 #----------x_transformer_by_config----------
 
 def x_transformer_by_config(config):
@@ -156,6 +180,28 @@ def x_transformer_by_config(config):
         return TfidfXTransformer(x_transormer_config)
     logging.fatal("unknown x transformer name: {0}".format(name))
     exit(1)
+
+#----------DummyModel----------
+
+class DummyModel:
+    def __init__(self, config):
+        self.log = logging.getLogger("SkLearnCountVectorizerModel")
+        self.log.info("model config:", config)
+        self.config = config
+        self.log.info("inited")
+
+    def load_train_data(self, x_train, y_train):
+        self.log.info("load x_train size: {0} y_train size: {1}".format(x_train.shape[0], len(y_train)))
+        self.x_train = x_train
+        self.y_train = y_train
+        self.log.info("loaded")
+
+    def predict(self, x_to_predict):
+        self.log.info("predict x_to_predict size: {0}".format(x_to_predict.shape[0]))
+        result = [1]
+        self.log.info("predicted")
+        return result
+
 #----------LinearSVCModel----------
 
 from sklearn.feature_extraction import text
@@ -183,6 +229,7 @@ class LinearSVCModel:
 
     def weights(self):
         return [0]
+
 #----------model_by_config----------
 
 def model_by_config(config):
@@ -197,10 +244,10 @@ def model_by_config(config):
 config = json.loads("""
 {
   "data_provider": {
-    "x_known": "../input/train.csv",
-    "y_known": "../input/train.csv",
-    "x_to_predict": "../input/test.csv",
-    "known_using_part" : 1,
+    "x_known": "../input/head_train.csv",
+    "y_known": "../input/head_train.csv",
+    "x_to_predict": "../input/head_test.csv",
+    "known_using_part" : 0.01,
     "train_part": 0.99999999999
   },
   "x_transformer": {
@@ -216,7 +263,6 @@ config = json.loads("""
   "answer_file": "submission.csv"
 }
 """)
-#----------Launcher----------
 
 log = logging.getLogger("Launcher")
 

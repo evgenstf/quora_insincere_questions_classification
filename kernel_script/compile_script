@@ -1,14 +1,12 @@
 rm script.py
 cat ../base/*.py >> script.py
-tail -n +5 ../data_provider/data_provider.py >> script.py
-tail -n +6 ../x_transformer/tfidf_x_transformer.py >> script.py
-tail -n +8 ../x_transformer/x_transformer_by_config.py >> script.py
-tail -n +5 ../model/linear_svc_model.py >> script.py
-tail -n +8 ../model/model_by_config.py >> script.py
+tail -n +10 ../data_provider/data_provider.py >> script.py
+for f in ../x_transformer/*.py; do tail -n +10 "$f" >> script.py; done
+for f in ../model/*.py; do tail -n +10 "$f" >> script.py; done
 
 echo "#----------config----------" >> script.py
 echo "config = json.loads(\"\"\"" >> script.py
-cat config.json >> script.py
+cat ../launcher/config.json >> script.py
 echo "\"\"\")" >> script.py
 
-tail -n +19 ../launcher/launcher.py >> script.py
+tail -n +20 ../launcher/launcher.py >> script.py
