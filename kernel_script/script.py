@@ -56,7 +56,13 @@ def mape_score(y_data, prediction):
     return total
 
 def ratio_score(y_expected, y_predicted):
-    return roc_auc_score(y_expected[:len(y_predicted)], y_predicted)
+    total = 0
+    bad_cnt = 0
+    for i in range(len(y_predicted)):
+        if (y_expected[i] != y_predicted[i]):
+            bad_cnt += 1
+        total += 1
+    return (total - bad_cnt) / total
 
 #----------DataProvider----------
 
@@ -162,8 +168,9 @@ class TfidfXTransformer:
 
     def transform(self, x_data):
         self.log.info("transform x_data size: {0}".format(len(x_data)))
-        result = self.vectorizer.transform(x_data)
+        result = self.vectorizer.transform(x_data).todense()
         self.log.info("transformed")
+        result = np.array(result, dtype=np.float16)
         return result
 
     def features(self):
@@ -224,7 +231,10 @@ class LinearSVCModel:
 
     def predict(self, x_to_predict):
         self.log.info("predict x_to_predict size: {0}".format(x_to_predict.shape[0]))
-        predictions = 1 /(1 + np.exp(self.model.decision_function(-x_to_predict)))
+        propabilities = 1 /(1 + np.exp(self.model.decision_function(-x_to_predict)))
+        predictions = []
+        for propability in propabilities:
+            predictions.append(1 if propability > 0.8 else 0)
         return predictions
 
     def weights(self):
@@ -239,30 +249,104 @@ def model_by_config(config):
         return DummyModel(model_config)
     if (name == "linear_svc"):
         return LinearSVCModel(model_config)
+    if (name == "regboost"):
+        return RegboostModel(model_config)
     logging.fatal("unknown model name: {0}".format(name))
+
+#----------RegboostSVCModel----------
+
+import catboost as cb
+from scipy.stats import spearmanr
+
+class RegboostModel:
+    def __init__(self, config):
+        self.log = logging.getLogger("RegboostModel")
+        self.log.info("model config: {0}".format(config))
+        self.config = config
+        self.model = cb.CatBoostRegressor(
+                #logging_level="Silent",
+                loss_function=self.config["loss_function"],
+                #classes_count=self.config["classes_count"],
+                iterations=self.config["iterations"],
+                l2_leaf_reg=self.config["l2_leaf_reg"],
+                learning_rate=self.config["learning_rate"],
+                depth=self.config["depth"],
+                #bagging_temperature=self.config["bagging_temperature"],
+                metric_period=10,
+                thread_count=19,
+                random_state=42,
+                border_count=100,
+                bootstrap_type=config["bootstrap_type"]
+                #one_hot_max_size=10
+                #one_hot_max_size=self.config["one_hot_max_size"]
+        )
+        self.log.info("inited")
+
+    def load_train_data(self, x_train, y_train):
+        print(x_train)
+        self.log.info("load x_train size: {0} y_train size: {1}".format(x_train.shape[0], len(y_train)))
+        self.model.fit(x_train, y_train)
+        self.log.info("loaded")
+        """
+        for i in range(150):
+            print(i, self.model.feature_importances_[i])
+        exit()
+        """
+        self.log.info("loaded")
+
+    def predict(self, x_to_predict):
+        self.log.info("predict x_to_predict size: {0}".format(len(x_to_predict)))
+        prediction = self.round_prediction(self.model.predict(x_to_predict))
+        #prediction = self.model.predict(x_to_predict)
+        self.log.info("predicted")
+        return prediction
+
+    def round_prediction(self, prediction):
+        result = [0] * len(prediction)
+        sort_ind = np.argsort(prediction)
+
+        for i in range(len(sort_ind)):
+            result[sort_ind[i]] = int(i / len(sort_ind) * 21)
+        return result
 #----------config----------
 config = json.loads("""
 {
   "data_provider": {
-    "x_known": "../input/head_train.csv",
-    "y_known": "../input/head_train.csv",
-    "x_to_predict": "../input/head_test.csv",
-    "known_using_part" : 0.01,
-    "train_part": 0.99999999999
+    "x_known": "../input/train.csv",
+    "y_known": "../input/train.csv",
+    "x_to_predict": "../input/test.csv",
+    "known_using_part" : 1,
+    "train_part": 0.8
   },
   "x_transformer": {
     "name": "tfidf",
     "min_df": 0,
     "max_df": 0.9,
     "ngram_range" : [1, 2],
-    "max_features": 100000000
+    "max_features": 1000
   },
   "model": {
-    "name": "linear_svc"
+    "name": "regboost",
+    "iterations": 1000,
+    "depth": 8,
+    "learning_rate": 0.2,
+    "l2_leaf_reg":0.07,
+    "loss_function": "RMSE",
+    "classes_count": 5,
+    "bootstrap_type" : "No"
   },
   "answer_file": "submission.csv"
 }
 """)
+
+def calculate_and_print_test_score(data_provider, x_transformer, model, config):
+    test_prediction = model.predict(x_transformer.transform(data_provider.x_test))
+    test_score = ratio_score(test_prediction, data_provider.y_test)
+    print("************************")
+    print("test_score:", test_score)
+    print("************************")
+    score_file = open('scores/' + str(test_score), 'w')
+    score_file.write(str(json.dumps(config)))
 
 log = logging.getLogger("Launcher")
 
@@ -276,8 +360,9 @@ model = model_by_config(config)
 x_transformer.load_train_data(data_provider.x_train, data_provider.y_train)
 model.load_train_data(x_transformer.transform(data_provider.x_train), data_provider.y_train)
 
-prediction = model.predict(x_transformer.transform(data_provider.x_to_predict))
+calculate_and_print_test_score(data_provider, x_transformer, model, config)
 
+prediction = model.predict(x_transformer.transform(data_provider.x_to_predict))
 
 answer_file = open(config["answer_file"], 'w')
 answer_file.write("qid,prediction\n")
