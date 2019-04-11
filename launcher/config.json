@@ -1,0 +1,27 @@
+{
+  "data_provider": {
+    "x_known": "../input/train.csv",
+    "y_known": "../input/train.csv",
+    "x_to_predict": "../input/test.csv",
+    "known_using_part" : 1,
+    "train_part": 0.8
+  },
+  "x_transformer": {
+    "name": "tfidf",
+    "min_df": 0,
+    "max_df": 0.9,
+    "ngram_range" : [1, 2],
+    "max_features": 1000
+  },
+  "model": {
+    "name": "regboost",
+    "iterations": 1000,
+    "depth": 8,
+    "learning_rate": 0.2,
+    "l2_leaf_reg":0.07,
+    "loss_function": "RMSE",
+    "classes_count": 5,
+    "bootstrap_type" : "No"
+  },
+  "answer_file": "submission.csv"
+}

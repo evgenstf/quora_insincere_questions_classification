@@ -6,7 +6,7 @@ for f in ../model/*.py; do tail -n +10 "$f" >> script.py; done
 
 echo "#----------config----------" >> script.py
 echo "config = json.loads(\"\"\"" >> script.py
-cat ../sandbox/config.json >> script.py
+cat ../launcher/config.json >> script.py
 echo "\"\"\")" >> script.py
 
 tail -n +20 ../launcher/launcher.py >> script.py
