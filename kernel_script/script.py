@@ -27,7 +27,9 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 
 from math import sqrt
-
+import spacy
+from tqdm import tqdm
+import gc
 
 
 def draw_pair_plot(x_data, y_data):
@@ -176,6 +178,61 @@ class TfidfXTransformer:
     def features(self):
         return self.vectorizer.get_feature_names()
 
+#----------W2VXTransformer----------
+
+class W2VXTransformer:
+    def __init__(self, config):
+        self.log = logging.getLogger("W2VXTransformer")
+        self.log.info("x_transformer config:", config)
+
+
+        self.log.info("inited")
+
+    def load_train_data(self, x_train, y_train):
+        self.log.info("load x_train size: {0} y_train size: {1}".format(len(x_train), len(y_train)))
+        self.x_train = x_train
+        self.y_train = y_train
+        self.lemmatize()
+        self.log.info("loaded")
+
+    def transform(self, x_data):
+        self.log.info("transform x_data size: {0}".format(len(x_data)))
+        result = self.vectorizer.transform(x_data).todense()
+        self.log.info("transformed")
+        result = np.array(result, dtype=np.float16)
+        return result
+
+    def features(self):
+        return self.vectorizer.get_feature_names()
+
+    def lemmatize(self):
+        self.log.info("lemmatize called")
+        lemmatizer = spacy.load('en_core_web_lg', disable=['parser','ner','tagger'])
+        self.log.info("lemmatizer load")
+        lemmatizer.vocab.add_flag(lambda s: s.lower() in spacy.lang.en.stop_words.STOP_WORDS, spacy.attrs.IS_STOP)
+        self.log.info("lemmatizer flags added")
+        word_dict = {}
+        word_index = 1
+        lemma_dict = {}
+        docs = lemmatizer.pipe(self.x_train, n_threads = 2)
+        word_sequences = []
+        for doc in tqdm(docs):
+            word_seq = []
+            for token in doc:
+                if (token.text not in word_dict) and (token.pos_ is not "PUNCT"):
+                    word_dict[token.text] = word_index
+                    word_index += 1
+                    lemma_dict[token.text] = token.lemma_
+                if token.pos_ is not "PUNCT":
+                    word_seq.append(word_dict[token.text])
+            word_sequences.append(word_seq)
+        del docs
+        gc.collect()
+        #train_word_sequences = word_sequences[:num_train_data]
+        #test_word_sequences = word_sequences[num_train_data:]
+
+
+
 #----------x_transformer_by_config----------
 
 def x_transformer_by_config(config):
@@ -185,6 +242,8 @@ def x_transformer_by_config(config):
         return DummyXTransformer(x_transormer_config)
     if (name == "tfidf"):
         return TfidfXTransformer(x_transormer_config)
+    if (name == "w2v"):
+        return W2VXTransformer(x_transormer_config)
     logging.fatal("unknown x transformer name: {0}".format(name))
     exit(1)
 
@@ -315,15 +374,11 @@ config = json.loads("""
     "x_known": "../input/train.csv",
     "y_known": "../input/train.csv",
     "x_to_predict": "../input/test.csv",
-    "known_using_part" : 1,
+    "known_using_part" : 0.01,
     "train_part": 0.8
   },
   "x_transformer": {
-    "name": "tfidf",
-    "min_df": 0,
-    "max_df": 0.9,
-    "ngram_range" : [1, 2],
-    "max_features": 1000
+    "name": "w2v"
   },
   "model": {
     "name": "regboost",
@@ -355,6 +410,10 @@ log.info("launcher config: {0}".format(config))
 data_provider = DataProvider(config["data_provider"])
 
 x_transformer = x_transformer_by_config(config)
+x_transformer.load_train_data(data_provider.x_known, data_provider.y_known)
+
+exit()
+
 model = model_by_config(config)
 
 x_transformer.load_train_data(data_provider.x_train, data_provider.y_train)

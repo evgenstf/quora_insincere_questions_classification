@@ -27,7 +27,9 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 
 from math import sqrt
-
+import spacy
+from tqdm import tqdm
+import gc
 
 
 def draw_pair_plot(x_data, y_data):
