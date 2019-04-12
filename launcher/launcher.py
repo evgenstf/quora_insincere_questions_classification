@@ -34,7 +34,7 @@ log.info("launcher config: {0}".format(config))
 data_provider = DataProvider(config["data_provider"])
 
 x_transformer = x_transformer_by_config(config)
-x_transformer.load_train_data(data_provider.x_known, data_provider.y_known)
+x_transformer.transform(data_provider.x_known)
 
 exit()
 
