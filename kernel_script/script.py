@@ -26,6 +26,10 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
+from nltk.stem import PorterStemmer
+from nltk.stem.lancaster import LancasterStemmer
+from nltk.stem import SnowballStemmer
+
 from math import sqrt
 import spacy
 from tqdm import tqdm
@@ -113,6 +117,79 @@ class DataProvider:
 
 
 
+#----------EmbeddingProvider----------
+
+from sklearn.model_selection import train_test_split
+from random import shuffle
+import pandas as pd
+
+class EmbeddingProvider:
+    def __init__(self, config):
+        self.log = logging.getLogger("EmbeddingProvider")
+        self.log.info("embedding provider config: {0}".format(config))
+        self.wiki_news_path = config['wiki_news_path']
+        self.glove_path = config['glove_path']
+        self.paragram_path = config['paragram_path']
+        self.porter_stemmer = PorterStemmer()
+        self.lancaster_stemmer = LancasterStemmer()
+        self.snowball_stemmer = SnowballStemmer('english')
+        self.log.info("inited")
+
+    def generate_embedding_matrix(self, words, lemmas):
+        self.log.info("called")
+        def get_coefs(word,*arr): return word, np.asarray(arr, dtype='float32')
+        embeddings_index = dict(get_coefs(*o.split(" ")) for o in open(self.glove_path) if len(o) > 100)
+        self.log.info("indexes loaded")
+        embed_size = 300
+        nb_words = len(words) + 1
+        embedding_matrix = np.zeros((nb_words, embed_size), dtype=np.float32)
+        unknown_vector = np.zeros((embed_size,), dtype=np.float32) - 1.
+        for key in tqdm(words):
+            self.log.info("process word: {}".format(key))
+            word = key
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[words[key]] = embedding_vector
+                continue
+            word = key.lower()
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[words[key]] = embedding_vector
+                continue
+            word = key.upper()
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[words[key]] = embedding_vector
+                continue
+            word = key.capitalize()
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[words[key]] = embedding_vector
+                continue
+            word = self.porter_stemmer.stem(key)
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[words[key]] = embedding_vector
+                continue
+            word = self.lancaster_stemmer.stem(key)
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[words[key]] = embedding_vector
+                continue
+            word = self.snowball_stemmer.stem(key)
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[words[key]] = embedding_vector
+                continue
+            word = lemmas[key]
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[words[key]] = embedding_vector
+                continue
+            embedding_matrix[words[key]] = unknown_vector                    
+        return 0
+
+
 #----------DummyXTransformer----------
 
 class DummyXTransformer:
@@ -188,39 +265,36 @@ class W2VXTransformer:
 
         self.log.info("inited")
 
-    def lemmatize(self, textes):
+    def generate_words_and_lemmas(self, textes):
         self.log.info("lemmatize called")
         lemmatizer = spacy.load('en_core_web_lg', disable=['parser','ner','tagger'])
         self.log.info("lemmatizer load")
         lemmatizer.vocab.add_flag(lambda s: s.lower() in spacy.lang.en.stop_words.STOP_WORDS, spacy.attrs.IS_STOP)
         self.log.info("lemmatizer flags added")
-        word_dict = {}
+        words = {}
         word_index = 1
-        lemma_dict = {}
+        lemmas = {}
         lemmatized_texts = lemmatizer.pipe(textes, n_threads = 2)
         word_sequences = []
         for text in tqdm(lemmatized_texts):
             word_seq = []
             for word in text:
-                if (word.text not in word_dict) and (word.pos_ is not "PUNCT"):
-                    word_dict[word.text] = word_index
+                if (word.text not in words) and (word.pos_ is not "PUNCT"):
+                    words[word.text] = word_index
                     word_index += 1
-                    lemma_dict[word.text] = word.lemma_
+                    lemmas[word.text] = word.lemma_
                 if word.pos_ is not "PUNCT":
-                    word_seq.append(word_dict[word.text])
+                    word_seq.append(words[word.text])
             word_sequences.append(word_seq)
         del lemmatized_texts
         gc.collect()
-        return word_sequences
+        return word_sequences, words, lemmas
 
     def transform(self, x_data):
         self.log.info("transform x_data size: {0}".format(len(x_data)))
         lemmatized_sequences = self.lemmatize(x_data)
-        result = lemmatized_sequences
+        result, words, lemmas = generate_words_and_lemmas(x_data)
         return result
-
-    def features(self):
-        return self.vectorizer.get_feature_names()
 
 
 
@@ -368,6 +442,11 @@ config = json.loads("""
     "known_using_part" : 0.01,
     "train_part": 0.8
   },
+  "embedding_provider": {
+    "glove_path": "../input/embeddings/glove.840B.300d/glove.840B.300d.txt",
+    "paragram_path": "../input/embeddings/paragram_300_sl999/paragram_300_sl999.txt",
+    "wiki_news_path": "../input/embeddings/wiki-news-300d-1M/wiki-news-300d-1M.vec"
+  },
   "x_transformer": {
     "name": "w2v"
   },
@@ -384,6 +463,7 @@ config = json.loads("""
   "answer_file": "submission.csv"
 }
 """)
+#----------Launcher----------
 
 def calculate_and_print_test_score(data_provider, x_transformer, model, config):
     test_prediction = model.predict(x_transformer.transform(data_provider.x_test))
@@ -398,12 +478,17 @@ log = logging.getLogger("Launcher")
 
 log.info("launcher config: {0}".format(config))
 
+
 data_provider = DataProvider(config["data_provider"])
 
 x_transformer = x_transformer_by_config(config)
-x_transformer.transform(data_provider.x_known)
+seq, words, lemmas = x_transformer.generate_words_and_lemmas(data_provider.x_known)
+
+embedding_provider = EmbeddingProvider(config["embedding_provider"])
+embedding_matrix = embedding_provider.generate_embedding_matrix(words, lemmas)
 
 exit()
+
 
 model = model_by_config(config)
 

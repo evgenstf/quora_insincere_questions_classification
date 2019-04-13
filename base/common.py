@@ -26,6 +26,10 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
+from nltk.stem import PorterStemmer
+from nltk.stem.lancaster import LancasterStemmer
+from nltk.stem import SnowballStemmer
+
 from math import sqrt
 import spacy
 from tqdm import tqdm

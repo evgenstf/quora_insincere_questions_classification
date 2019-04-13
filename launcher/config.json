@@ -6,6 +6,11 @@
     "known_using_part" : 0.01,
     "train_part": 0.8
   },
+  "embedding_provider": {
+    "glove_path": "../input/embeddings/glove.840B.300d/glove.840B.300d.txt",
+    "paragram_path": "../input/embeddings/paragram_300_sl999/paragram_300_sl999.txt",
+    "wiki_news_path": "../input/embeddings/wiki-news-300d-1M/wiki-news-300d-1M.vec"
+  },
   "x_transformer": {
     "name": "w2v"
   },

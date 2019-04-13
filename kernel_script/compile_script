@@ -1,6 +1,7 @@
 rm script.py
 cat ../base/*.py >> script.py
 tail -n +10 ../data_provider/data_provider.py >> script.py
+tail -n +10 ../data_provider/embedding_provider.py >> script.py
 for f in ../x_transformer/*.py; do tail -n +10 "$f" >> script.py; done
 for f in ../model/*.py; do tail -n +10 "$f" >> script.py; done
 

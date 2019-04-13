@@ -6,6 +6,7 @@ sys.path.append("../model")
 
 from common import *
 from data_provider import *
+from embedding_provider import *
 from x_transformer_by_config import *
 from model_by_config import *
 
@@ -31,12 +32,17 @@ log = logging.getLogger("Launcher")
 
 log.info("launcher config: {0}".format(config))
 
+
 data_provider = DataProvider(config["data_provider"])
 
 x_transformer = x_transformer_by_config(config)
-x_transformer.transform(data_provider.x_known)
+seq, words, lemmas = x_transformer.generate_words_and_lemmas(data_provider.x_known)
+
+embedding_provider = EmbeddingProvider(config["embedding_provider"])
+embedding_matrix = embedding_provider.generate_embedding_matrix(words, lemmas)
 
 exit()
+
 
 model = model_by_config(config)
 

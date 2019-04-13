@@ -18,3 +18,4 @@ input
 catboost_info
 *.zip
 *.csv
+embeddings
