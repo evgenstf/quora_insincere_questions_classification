@@ -26,8 +26,14 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-from math import sqrt
+from nltk.stem import PorterStemmer
+from nltk.stem.lancaster import LancasterStemmer
+from nltk.stem import SnowballStemmer
 
+from math import sqrt
+import spacy
+from tqdm import tqdm
+import gc
 
 
 def draw_pair_plot(x_data, y_data):
@@ -56,4 +62,10 @@ def mape_score(y_data, prediction):
     return total
 
 def ratio_score(y_expected, y_predicted):
-    return roc_auc_score(y_expected[:len(y_predicted)], y_predicted)
+    total = 0
+    bad_cnt = 0
+    for i in range(len(y_predicted)):
+        if (y_expected[i] != y_predicted[i]):
+            bad_cnt += 1
+        total += 1
+    return (total - bad_cnt) / total

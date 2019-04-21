@@ -3,6 +3,11 @@ sys.path.append("../../base")
 from common import *
 import string
 
+
+
+
+
+
 #----------TfidfXTransformer----------
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -39,8 +44,9 @@ class TfidfXTransformer:
 
     def transform(self, x_data):
         self.log.info("transform x_data size: {0}".format(len(x_data)))
-        result = self.vectorizer.transform(x_data)
+        result = self.vectorizer.transform(x_data).todense()
         self.log.info("transformed")
+        result = np.array(result, dtype=np.float16)
         return result
 
     def features(self):

@@ -2,6 +2,12 @@ import sys
 sys.path.append("../../base")
 from common import *
 
+
+
+
+
+
+
 #----------LinearSVCModel----------
 
 from sklearn.feature_extraction import text
@@ -24,7 +30,10 @@ class LinearSVCModel:
 
     def predict(self, x_to_predict):
         self.log.info("predict x_to_predict size: {0}".format(x_to_predict.shape[0]))
-        predictions = 1 /(1 + np.exp(self.model.decision_function(-x_to_predict)))
+        propabilities = 1 /(1 + np.exp(self.model.decision_function(-x_to_predict)))
+        predictions = []
+        for propability in propabilities:
+            predictions.append(1 if propability > 0.8 else 0)
         return predictions
 
     def weights(self):

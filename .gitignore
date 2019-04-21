@@ -15,3 +15,7 @@ train.csv
 test.csv
 submission.csv
 input
+catboost_info
+*.zip
+*.csv
+embeddings

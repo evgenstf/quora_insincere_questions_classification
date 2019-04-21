@@ -1,20 +1,28 @@
 {
   "data_provider": {
-    "x_known": "../qdata/raw/train.csv",
-    "y_known": "../qdata/raw/train.csv",
-    "x_to_predict": "../qdata/raw/head_test.csv",
+    "x_known": "../input/train.csv",
+    "y_known": "../input/train.csv",
+    "x_to_predict": "../input/test.csv",
     "known_using_part" : 0.01,
-    "train_part": 0.99999999999
+    "train_part": 0.8
+  },
+  "embedding_provider": {
+    "glove_path": "../input/embeddings/glove.840B.300d/glove.840B.300d.txt",
+    "paragram_path": "../input/embeddings/paragram_300_sl999/paragram_300_sl999.txt",
+    "wiki_news_path": "../input/embeddings/wiki-news-300d-1M/wiki-news-300d-1M.vec"
   },
   "x_transformer": {
-    "name": "tfidf",
-    "min_df": 0,
-    "max_df": 0.9,
-    "ngram_range" : [1, 2],
-    "max_features": 100000000
+    "name": "w2v"
   },
   "model": {
-    "name": "linear_svc"
+    "name": "regboost",
+    "iterations": 1000,
+    "depth": 8,
+    "learning_rate": 0.2,
+    "l2_leaf_reg":0.07,
+    "loss_function": "RMSE",
+    "classes_count": 5,
+    "bootstrap_type" : "No"
   },
   "answer_file": "submission.csv"
 }
