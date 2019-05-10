@@ -3,7 +3,7 @@
     "x_known": "../input/train.csv",
     "y_known": "../input/train.csv",
     "x_to_predict": "../input/test.csv",
-    "known_using_part" : 0.001,
+    "known_using_part" : 0.1,
     "train_part": 0.8
   },
   "embedding_provider": {
@@ -15,8 +15,17 @@
     "name": "w2v"
   },
   "model": {
+    "name": "classboost",
+    "iterations": 10,
+    "depth": 10,
+    "learning_rate": 0.3,
+    "l2_leaf_reg":0.07,
+    "loss_function": "MultiClassOneVsAll",
+    "classes_count": 2
+  },
+  "model2": {
     "name": "regboost",
-    "iterations": 1000,
+    "iterations": 100,
     "depth": 8,
     "learning_rate": 0.2,
     "l2_leaf_reg":0.07,

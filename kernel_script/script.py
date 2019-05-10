@@ -71,6 +71,18 @@ def ratio_score(y_expected, y_predicted):
         total += 1
     return (total - bad_cnt) / total
 
+def false_positive_negative_score(y_expected, y_predicted):
+    false_positive = 0
+    false_negative = 0
+    for i in range(len(y_predicted)):
+        if (y_expected[i] != y_predicted[i]):
+            if (y_predicted[i] == 1):
+                false_negative += 1
+            else:
+                false_positive += 1
+    return false_positive, false_negative
+
+
 #----------DataProvider----------
 
 from sklearn.model_selection import train_test_split
@@ -287,11 +299,13 @@ class W2VXTransformer:
         result = []
         lemmatized_texts = self.lemmatizer.pipe(x_data, n_threads = 2)
         for text in tqdm(lemmatized_texts):
-            vectorized_text = []
+            vector = [0] * len(embedding_matrix[0])
             for word in text:
                 if (word.pos_ is not "PUNCT"):
-                    vectorized_text.append(embedding_matrix[self.code_by_word[word.lemma_]])
-            result.append(vectorized_text)
+                    embedding_vector = embedding_matrix[self.code_by_word[word.lemma_]]
+                    for i in range(len(embedding_vector)):
+                        vector[i] += embedding_vector[i]
+            result.append(vector)
         return result
 
 
@@ -309,6 +323,36 @@ def x_transformer_by_config(config):
         return W2VXTransformer(x_transormer_config)
     logging.fatal("unknown x transformer name: {0}".format(name))
     exit(1)
+#----------catboost_model----------
+
+class ClassboostModel:
+    def __init__(self, config):
+        self.log = logging.getLogger("ClassboostModel")
+        self.log.info("model config: {0}".format(config))
+        self.config = config
+        self.model = cb.CatBoostClassifier(
+                #logging_level="Silent",
+                loss_function=self.config["loss_function"],
+                #classes_count=2,
+                iterations=self.config["iterations"],
+                #l2_leaf_reg=self.config["l2_leaf_reg"],
+                learning_rate=self.config["learning_rate"],
+                depth=self.config["depth"],
+                class_weights=[ 0.1, 0.9 ]
+                #thread_count=19
+        )
+        self.log.info("inited")
+
+    def load_train_data(self, x_train, y_train):
+        self.log.info("load x_train size: {0} y_train size: {1}".format(len(x_train), len(y_train)))
+        self.model.fit(x_train, y_train)
+        self.log.info("loaded")
+
+    def predict(self, x_to_predict):
+        self.log.info("predict x_to_predict size: {0}".format(len(x_to_predict)))
+        prediction = self.model.predict(x_to_predict)
+        self.log.info("predicted")
+        return prediction.reshape(-1,)
 
 #----------DummyModel----------
 
@@ -373,6 +417,8 @@ def model_by_config(config):
         return LinearSVCModel(model_config)
     if (name == "regboost"):
         return RegboostModel(model_config)
+    if (name == "classboost"):
+        return ClassboostModel(model_config)
     logging.fatal("unknown model name: {0}".format(name))
 
 #----------RegboostSVCModel----------
@@ -405,15 +451,8 @@ class RegboostModel:
         self.log.info("inited")
 
     def load_train_data(self, x_train, y_train):
-        print(x_train)
-        self.log.info("load x_train size: {0} y_train size: {1}".format(x_train.shape[0], len(y_train)))
+        self.log.info("load x_train size: {0} y_train size: {1}".format(len(x_train), len(y_train)))
         self.model.fit(x_train, y_train)
-        self.log.info("loaded")
-        """
-        for i in range(150):
-            print(i, self.model.feature_importances_[i])
-        exit()
-        """
         self.log.info("loaded")
 
     def predict(self, x_to_predict):
@@ -425,10 +464,8 @@ class RegboostModel:
 
     def round_prediction(self, prediction):
         result = [0] * len(prediction)
-        sort_ind = np.argsort(prediction)
-
-        for i in range(len(sort_ind)):
-            result[sort_ind[i]] = int(i / len(sort_ind) * 21)
+        for i in range(len(prediction)):
+            result[i] = 0 if prediction[i] < -1 else 1
         return result
 #----------config----------
 config = json.loads("""
@@ -437,7 +474,7 @@ config = json.loads("""
     "x_known": "../input/train.csv",
     "y_known": "../input/train.csv",
     "x_to_predict": "../input/test.csv",
-    "known_using_part" : 0.001,
+    "known_using_part" : 0.1,
     "train_part": 0.8
   },
   "embedding_provider": {
@@ -449,8 +486,17 @@ config = json.loads("""
     "name": "w2v"
   },
   "model": {
+    "name": "classboost",
+    "iterations": 10,
+    "depth": 10,
+    "learning_rate": 0.3,
+    "l2_leaf_reg":0.07,
+    "loss_function": "MultiClassOneVsAll",
+    "classes_count": 2
+  },
+  "model2": {
     "name": "regboost",
-    "iterations": 1000,
+    "iterations": 100,
     "depth": 8,
     "learning_rate": 0.2,
     "l2_leaf_reg":0.07,
@@ -464,13 +510,31 @@ config = json.loads("""
 #----------Launcher----------
 
 def calculate_and_print_test_score(data_provider, x_transformer, model, config):
-    test_prediction = model.predict(x_transformer.transform(data_provider.x_test))
-    test_score = ratio_score(test_prediction, data_provider.y_test)
+    test_prediction = model.predict(x_transformer.transform(data_provider.x_known))
+    false_positive, false_negative = false_positive_negative_score(data_provider.y_known, test_prediction)
+    total_positive = 0
+    total_negative = 0
+    predicted_positive = 0
+    predicted_negative = 0
+    for i in range(len(data_provider.y_known)):
+        x = data_provider.y_known[i]
+        if x == 1:
+            total_negative += 1
+            if (x == test_prediction[i]):
+                predicted_negative += 1
+        else:
+            total_positive += 1
+            if (x == test_prediction[i]):
+                predicted_positive += 1
     print("************************")
-    print("test_score:", test_score)
+    print("predicted_positive:", predicted_positive, "/", total_positive)
+    print("predicted_negative:", predicted_negative, "/", total_negative)
+    positive_acc = predicted_positive / total_positive
+    negative_acc = predicted_negative / total_negative
+    print("F score: ", (positive_acc * negative_acc) / (positive_acc + negative_acc) * 2)
     print("************************")
-    score_file = open('scores/' + str(test_score), 'w')
-    score_file.write(str(json.dumps(config)))
+    #score_file = open('scores/' + str(false_positive) + '_' + str(false_negative), 'w')
+    #score_file.write(str(json.dumps(config)))
 
 log = logging.getLogger("Launcher")
 
@@ -485,14 +549,10 @@ code_by_word, lemma_by_word = x_transformer.generate_words_and_lemmas(np.concate
 embedding_provider = EmbeddingProvider(config["embedding_provider"])
 embedding_matrix = embedding_provider.generate_embedding_matrix(code_by_word, lemma_by_word)
 
-log.info("embedding_matrix generated")
+log.info("embedding_matrix generated with shape: {}".format(embedding_matrix.shape))
 
 
 x_transformer.load_train_data(embedding_matrix)
-
-transformed = x_transformer.transform(data_provider.x_to_predict)
-print(transformed[:3])
-exit()
 
 model = model_by_config(config)
 model.load_train_data(x_transformer.transform(data_provider.x_train), data_provider.y_train)
@@ -505,5 +565,5 @@ answer_file = open(config["answer_file"], 'w')
 answer_file.write("qid,prediction\n")
 
 for i in range(len(prediction)):
-    answer_file.write("%s,%s\n" % (data_provider.x_to_predict_ids[i], prediction[i]))
+    answer_file.write("%s,%s\n" % (data_provider.x_to_predict_ids[i], int(prediction[i])))
 

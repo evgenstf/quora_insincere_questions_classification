@@ -54,10 +54,12 @@ class W2VXTransformer:
         result = []
         lemmatized_texts = self.lemmatizer.pipe(x_data, n_threads = 2)
         for text in tqdm(lemmatized_texts):
-            vectorized_text = []
+            vector = [0] * len(embedding_matrix[0])
             for word in text:
                 if (word.pos_ is not "PUNCT"):
-                    vectorized_text.append(embedding_matrix[self.code_by_word[word.lemma_]])
-            result.append(vectorized_text)
+                    embedding_vector = embedding_matrix[self.code_by_word[word.lemma_]]
+                    for i in range(len(embedding_vector)):
+                        vector[i] += embedding_vector[i]
+            result.append(vector)
         return result
 
