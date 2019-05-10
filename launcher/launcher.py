@@ -36,17 +36,21 @@ log.info("launcher config: {0}".format(config))
 data_provider = DataProvider(config["data_provider"])
 
 x_transformer = x_transformer_by_config(config)
-seq, words, lemmas = x_transformer.generate_words_and_lemmas(data_provider.x_known)
+code_by_word, lemma_by_word = x_transformer.generate_words_and_lemmas(np.concatenate((data_provider.x_known, data_provider.x_to_predict)))
 
 embedding_provider = EmbeddingProvider(config["embedding_provider"])
-embedding_matrix = embedding_provider.generate_embedding_matrix(words, lemmas)
+embedding_matrix = embedding_provider.generate_embedding_matrix(code_by_word, lemma_by_word)
 
+log.info("embedding_matrix generated")
+
+
+x_transformer.load_train_data(embedding_matrix)
+
+transformed = x_transformer.transform(data_provider.x_to_predict)
+print(transformed[:3])
 exit()
 
-
 model = model_by_config(config)
-
-x_transformer.load_train_data(data_provider.x_train, data_provider.y_train)
 model.load_train_data(x_transformer.transform(data_provider.x_train), data_provider.y_train)
 
 calculate_and_print_test_score(data_provider, x_transformer, model, config)

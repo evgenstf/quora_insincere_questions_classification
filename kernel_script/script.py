@@ -25,6 +25,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
+from itertools import chain
 
 from nltk.stem import PorterStemmer
 from nltk.stem.lancaster import LancasterStemmer
@@ -92,6 +93,8 @@ class DataProvider:
         known_using_count = int(len(self.x_known) * self.known_using_part)
         self.x_known = self.x_known[:known_using_count]
         self.y_known = self.y_known[:known_using_count]
+        for i in range(len(self.x_known)):
+            self.x_known[i] = self.x_known[i].lower()
 
         self.log.info("loaded {0} x_known lines".format(len(self.x_known)))
         self.log.info("loaded {0} y_known lines".format(len(self.y_known)))
@@ -99,6 +102,8 @@ class DataProvider:
         x_to_predict_file = pd.read_csv(self.x_to_predict_path)
         self.x_to_predict_ids = np.array(x_to_predict_file['qid'].values)
         self.x_to_predict = np.array(x_to_predict_file['question_text'].values)
+        for i in range(len(self.x_to_predict)):
+            self.x_to_predict[i] = self.x_to_predict[i].lower()
         self.log.info("loaded {0} x_to_predict lines".format(len(self.x_to_predict)))
 
 
@@ -137,57 +142,38 @@ class EmbeddingProvider:
 
     def generate_embedding_matrix(self, words, lemmas):
         self.log.info("called")
-        def get_coefs(word,*arr): return word, np.asarray(arr, dtype='float32')
-        embeddings_index = dict(get_coefs(*o.split(" ")) for o in open(self.glove_path) if len(o) > 100)
-        self.log.info("indexes loaded")
+        def get_coefs(word, *arr):
+            print("word:", word, " code: ", words[word])
+            return word, np.asarray(arr, dtype='float32')
+        
+        vector_by_code = dict()
+        for string in tqdm(open(self.glove_path)):
+            word_and_vector = string.split(" ")
+            word = word_and_vector[0]
+            vector = word_and_vector[1:]
+            if (word in words):
+                vector_by_code[words[word]] = vector
+            if (word in lemmas):
+                word = lemmas[word]
+            if (word in words):
+                vector_by_code[words[word]] = vector
+
+        self.log.info("vector_by_code inited")
         embed_size = 300
         nb_words = len(words) + 1
         embedding_matrix = np.zeros((nb_words, embed_size), dtype=np.float32)
         unknown_vector = np.zeros((embed_size,), dtype=np.float32) - 1.
-        for key in tqdm(words):
-            self.log.info("process word: {}".format(key))
-            word = key
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = key.lower()
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = key.upper()
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = key.capitalize()
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = self.porter_stemmer.stem(key)
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = self.lancaster_stemmer.stem(key)
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = self.snowball_stemmer.stem(key)
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = lemmas[key]
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            embedding_matrix[words[key]] = unknown_vector                    
-        return 0
+        self.log.info("start generating embedding_matrix")
+        not_vectorized_cnt = 0
+        for word in tqdm(words):
+            code = words[word]
+            if code in vector_by_code:
+                embedding_matrix[code] = vector_by_code[code]
+            else:
+                embedding_matrix[code] = unknown_vector
+                not_vectorized_cnt += 1
+        self.log.info("not vectorized words count: {}".format(not_vectorized_cnt))
+        return embedding_matrix
 
 
 #----------DummyXTransformer----------
@@ -267,33 +253,45 @@ class W2VXTransformer:
 
     def generate_words_and_lemmas(self, textes):
         self.log.info("lemmatize called")
-        lemmatizer = spacy.load('en_core_web_lg', disable=['parser','ner','tagger'])
+        self.lemmatizer = spacy.load('en_core_web_lg', disable=['parser','ner','tagger'])
         self.log.info("lemmatizer load")
-        lemmatizer.vocab.add_flag(lambda s: s.lower() in spacy.lang.en.stop_words.STOP_WORDS, spacy.attrs.IS_STOP)
+        self.lemmatizer.vocab.add_flag(lambda s: s.lower() in spacy.lang.en.stop_words.STOP_WORDS, spacy.attrs.IS_STOP)
         self.log.info("lemmatizer flags added")
-        words = {}
+        self.code_by_word = {}
         word_index = 1
         lemmas = {}
-        lemmatized_texts = lemmatizer.pipe(textes, n_threads = 2)
-        word_sequences = []
+        lemmatized_texts = self.lemmatizer.pipe(textes, n_threads = 2)
         for text in tqdm(lemmatized_texts):
             word_seq = []
             for word in text:
-                if (word.text not in words) and (word.pos_ is not "PUNCT"):
-                    words[word.text] = word_index
+                lemma = word.lemma_
+                if (word.text not in self.code_by_word) and (word.pos_ is not "PUNCT"):
+                    self.code_by_word[word.text] = word_index
                     word_index += 1
-                    lemmas[word.text] = word.lemma_
+                if (lemma not in self.code_by_word) and (word.pos_ is not "PUNCT"):
+                    self.code_by_word[lemma] = word_index
+                    word_index += 1
+                lemmas[word.text] = word.lemma_
                 if word.pos_ is not "PUNCT":
-                    word_seq.append(words[word.text])
-            word_sequences.append(word_seq)
+                    word_seq.append(self.code_by_word[lemma])
         del lemmatized_texts
         gc.collect()
-        return word_sequences, words, lemmas
+
+        return self.code_by_word, lemmas
+
+    def load_train_data(self, embedding_matrix):
+        self.embedding_matrix = embedding_matrix
 
     def transform(self, x_data):
         self.log.info("transform x_data size: {0}".format(len(x_data)))
-        lemmatized_sequences = self.lemmatize(x_data)
-        result, words, lemmas = generate_words_and_lemmas(x_data)
+        result = []
+        lemmatized_texts = self.lemmatizer.pipe(x_data, n_threads = 2)
+        for text in tqdm(lemmatized_texts):
+            vectorized_text = []
+            for word in text:
+                if (word.pos_ is not "PUNCT"):
+                    vectorized_text.append(embedding_matrix[self.code_by_word[word.lemma_]])
+            result.append(vectorized_text)
         return result
 
 
@@ -439,7 +437,7 @@ config = json.loads("""
     "x_known": "../input/train.csv",
     "y_known": "../input/train.csv",
     "x_to_predict": "../input/test.csv",
-    "known_using_part" : 0.01,
+    "known_using_part" : 0.001,
     "train_part": 0.8
   },
   "embedding_provider": {
@@ -482,17 +480,21 @@ log.info("launcher config: {0}".format(config))
 data_provider = DataProvider(config["data_provider"])
 
 x_transformer = x_transformer_by_config(config)
-seq, words, lemmas = x_transformer.generate_words_and_lemmas(data_provider.x_known)
+code_by_word, lemma_by_word = x_transformer.generate_words_and_lemmas(np.concatenate((data_provider.x_known, data_provider.x_to_predict)))
 
 embedding_provider = EmbeddingProvider(config["embedding_provider"])
-embedding_matrix = embedding_provider.generate_embedding_matrix(words, lemmas)
+embedding_matrix = embedding_provider.generate_embedding_matrix(code_by_word, lemma_by_word)
 
+log.info("embedding_matrix generated")
+
+
+x_transformer.load_train_data(embedding_matrix)
+
+transformed = x_transformer.transform(data_provider.x_to_predict)
+print(transformed[:3])
 exit()
 
-
 model = model_by_config(config)
-
-x_transformer.load_train_data(data_provider.x_train, data_provider.y_train)
 model.load_train_data(x_transformer.transform(data_provider.x_train), data_provider.y_train)
 
 calculate_and_print_test_score(data_provider, x_transformer, model, config)

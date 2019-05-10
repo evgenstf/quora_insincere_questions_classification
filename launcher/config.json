@@ -3,7 +3,7 @@
     "x_known": "../input/train.csv",
     "y_known": "../input/train.csv",
     "x_to_predict": "../input/test.csv",
-    "known_using_part" : 0.01,
+    "known_using_part" : 0.001,
     "train_part": 0.8
   },
   "embedding_provider": {

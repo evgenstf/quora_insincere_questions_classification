@@ -25,6 +25,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
+from itertools import chain
 
 from nltk.stem import PorterStemmer
 from nltk.stem.lancaster import LancasterStemmer
