@@ -20,14 +20,14 @@ config = json.load(config_file)
 #----------Launcher----------
 
 def calculate_and_print_test_score(data_provider, x_transformer, model, config):
-    test_prediction = model.predict(x_transformer.transform(data_provider.x_known))
-    false_positive, false_negative = false_positive_negative_score(data_provider.y_known, test_prediction)
+    test_prediction = model.predict(x_transformer.transform(data_provider.x_test))
+    false_positive, false_negative = false_positive_negative_score(data_provider.y_test, test_prediction)
     total_positive = 0
     total_negative = 0
     predicted_positive = 0
     predicted_negative = 0
-    for i in range(len(data_provider.y_known)):
-        x = data_provider.y_known[i]
+    for i in range(len(data_provider.y_test)):
+        x = data_provider.y_test[i]
         if x == 1:
             total_negative += 1
             if (x == test_prediction[i]):
@@ -36,15 +36,22 @@ def calculate_and_print_test_score(data_provider, x_transformer, model, config):
             total_positive += 1
             if (x == test_prediction[i]):
                 predicted_positive += 1
+    acc_positive = predicted_positive / (predicted_positive + false_positive)
+    acc_negative = predicted_negative / (predicted_negative + false_negative)
+    acc = (acc_negative + acc_positive) / 2
+
+    rec_positive = predicted_positive / (predicted_positive + false_negative)
+    rec_negative = predicted_negative / (predicted_negative + false_positive)
+    rec = (rec_negative + rec_positive) / 2
+
+    f_score = (rec * acc) / (rec + acc) * 2
     print("************************")
     print("predicted_positive:", predicted_positive, "/", total_positive)
     print("predicted_negative:", predicted_negative, "/", total_negative)
-    positive_acc = predicted_positive / total_positive
-    negative_acc = predicted_negative / total_negative
-    print("F score: ", (positive_acc * negative_acc) / (positive_acc + negative_acc) * 2)
+    print("F score: ", f_score)
     print("************************")
-    #score_file = open('scores/' + str(false_positive) + '_' + str(false_negative), 'w')
-    #score_file.write(str(json.dumps(config)))
+    score_file = open(str(f_score), 'w')
+    score_file.write(str(json.dumps(config)))
 
 log = logging.getLogger("Launcher")
 
