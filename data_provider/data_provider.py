@@ -30,6 +30,8 @@ class DataProvider:
         known_using_count = int(len(self.x_known) * self.known_using_part)
         self.x_known = self.x_known[:known_using_count]
         self.y_known = self.y_known[:known_using_count]
+        for i in range(len(self.x_known)):
+            self.x_known[i] = self.x_known[i].lower()
 
         self.log.info("loaded {0} x_known lines".format(len(self.x_known)))
         self.log.info("loaded {0} y_known lines".format(len(self.y_known)))
@@ -37,6 +39,8 @@ class DataProvider:
         x_to_predict_file = pd.read_csv(self.x_to_predict_path)
         self.x_to_predict_ids = np.array(x_to_predict_file['qid'].values)
         self.x_to_predict = np.array(x_to_predict_file['question_text'].values)
+        for i in range(len(self.x_to_predict)):
+            self.x_to_predict[i] = self.x_to_predict[i].lower()
         self.log.info("loaded {0} x_to_predict lines".format(len(self.x_to_predict)))
 
 

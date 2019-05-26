@@ -25,6 +25,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
+from itertools import chain
 
 from nltk.stem import PorterStemmer
 from nltk.stem.lancaster import LancasterStemmer
@@ -70,6 +71,18 @@ def ratio_score(y_expected, y_predicted):
         total += 1
     return (total - bad_cnt) / total
 
+def false_positive_negative_score(y_expected, y_predicted):
+    false_positive = 0
+    false_negative = 0
+    for i in range(len(y_predicted)):
+        if (y_expected[i] != y_predicted[i]):
+            if (y_predicted[i] == 1):
+                false_negative += 1
+            else:
+                false_positive += 1
+    return false_positive, false_negative
+
+
 #----------DataProvider----------
 
 from sklearn.model_selection import train_test_split
@@ -92,6 +105,8 @@ class DataProvider:
         known_using_count = int(len(self.x_known) * self.known_using_part)
         self.x_known = self.x_known[:known_using_count]
         self.y_known = self.y_known[:known_using_count]
+        for i in range(len(self.x_known)):
+            self.x_known[i] = self.x_known[i].lower()
 
         self.log.info("loaded {0} x_known lines".format(len(self.x_known)))
         self.log.info("loaded {0} y_known lines".format(len(self.y_known)))
@@ -99,6 +114,8 @@ class DataProvider:
         x_to_predict_file = pd.read_csv(self.x_to_predict_path)
         self.x_to_predict_ids = np.array(x_to_predict_file['qid'].values)
         self.x_to_predict = np.array(x_to_predict_file['question_text'].values)
+        for i in range(len(self.x_to_predict)):
+            self.x_to_predict[i] = self.x_to_predict[i].lower()
         self.log.info("loaded {0} x_to_predict lines".format(len(self.x_to_predict)))
 
 
@@ -137,57 +154,38 @@ class EmbeddingProvider:
 
     def generate_embedding_matrix(self, words, lemmas):
         self.log.info("called")
-        def get_coefs(word,*arr): return word, np.asarray(arr, dtype='float32')
-        embeddings_index = dict(get_coefs(*o.split(" ")) for o in open(self.glove_path) if len(o) > 100)
-        self.log.info("indexes loaded")
+        def get_coefs(word, *arr):
+            print("word:", word, " code: ", words[word])
+            return word, np.asarray(arr, dtype='float32')
+        
+        vector_by_code = dict()
+        for string in tqdm(open(self.glove_path)):
+            word_and_vector = string.split(" ")
+            word = word_and_vector[0]
+            vector = word_and_vector[1:]
+            if (word in words):
+                vector_by_code[words[word]] = vector
+            if (word in lemmas):
+                word = lemmas[word]
+            if (word in words):
+                vector_by_code[words[word]] = vector
+
+        self.log.info("vector_by_code inited")
         embed_size = 300
         nb_words = len(words) + 1
         embedding_matrix = np.zeros((nb_words, embed_size), dtype=np.float32)
         unknown_vector = np.zeros((embed_size,), dtype=np.float32) - 1.
-        for key in tqdm(words):
-            self.log.info("process word: {}".format(key))
-            word = key
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = key.lower()
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = key.upper()
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = key.capitalize()
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = self.porter_stemmer.stem(key)
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = self.lancaster_stemmer.stem(key)
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = self.snowball_stemmer.stem(key)
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            word = lemmas[key]
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                embedding_matrix[words[key]] = embedding_vector
-                continue
-            embedding_matrix[words[key]] = unknown_vector                    
-        return 0
+        self.log.info("start generating embedding_matrix")
+        not_vectorized_cnt = 0
+        for word in tqdm(words):
+            code = words[word]
+            if code in vector_by_code:
+                embedding_matrix[code] = vector_by_code[code]
+            else:
+                embedding_matrix[code] = unknown_vector
+                not_vectorized_cnt += 1
+        self.log.info("not vectorized words count: {}".format(not_vectorized_cnt))
+        return embedding_matrix
 
 
 #----------DummyXTransformer----------
@@ -267,33 +265,47 @@ class W2VXTransformer:
 
     def generate_words_and_lemmas(self, textes):
         self.log.info("lemmatize called")
-        lemmatizer = spacy.load('en_core_web_lg', disable=['parser','ner','tagger'])
+        self.lemmatizer = spacy.load('en_core_web_lg', disable=['parser','ner','tagger'])
         self.log.info("lemmatizer load")
-        lemmatizer.vocab.add_flag(lambda s: s.lower() in spacy.lang.en.stop_words.STOP_WORDS, spacy.attrs.IS_STOP)
+        self.lemmatizer.vocab.add_flag(lambda s: s.lower() in spacy.lang.en.stop_words.STOP_WORDS, spacy.attrs.IS_STOP)
         self.log.info("lemmatizer flags added")
-        words = {}
+        self.code_by_word = {}
         word_index = 1
         lemmas = {}
-        lemmatized_texts = lemmatizer.pipe(textes, n_threads = 2)
-        word_sequences = []
+        lemmatized_texts = self.lemmatizer.pipe(textes, n_threads = 2)
         for text in tqdm(lemmatized_texts):
             word_seq = []
             for word in text:
-                if (word.text not in words) and (word.pos_ is not "PUNCT"):
-                    words[word.text] = word_index
+                lemma = word.lemma_
+                if (word.text not in self.code_by_word) and (word.pos_ is not "PUNCT"):
+                    self.code_by_word[word.text] = word_index
                     word_index += 1
-                    lemmas[word.text] = word.lemma_
+                if (lemma not in self.code_by_word) and (word.pos_ is not "PUNCT"):
+                    self.code_by_word[lemma] = word_index
+                    word_index += 1
+                lemmas[word.text] = word.lemma_
                 if word.pos_ is not "PUNCT":
-                    word_seq.append(words[word.text])
-            word_sequences.append(word_seq)
+                    word_seq.append(self.code_by_word[lemma])
         del lemmatized_texts
         gc.collect()
-        return word_sequences, words, lemmas
+
+        return self.code_by_word, lemmas
+
+    def load_train_data(self, embedding_matrix):
+        self.embedding_matrix = embedding_matrix
 
     def transform(self, x_data):
         self.log.info("transform x_data size: {0}".format(len(x_data)))
-        lemmatized_sequences = self.lemmatize(x_data)
-        result, words, lemmas = generate_words_and_lemmas(x_data)
+        result = []
+        lemmatized_texts = self.lemmatizer.pipe(x_data, n_threads = 2)
+        for text in tqdm(lemmatized_texts):
+            vector = [0] * len(embedding_matrix[0])
+            for word in text:
+                if (word.pos_ is not "PUNCT"):
+                    embedding_vector = embedding_matrix[self.code_by_word[word.lemma_]]
+                    for i in range(len(embedding_vector)):
+                        vector[i] += embedding_vector[i]
+            result.append(vector)
         return result
 
 
@@ -311,6 +323,36 @@ def x_transformer_by_config(config):
         return W2VXTransformer(x_transormer_config)
     logging.fatal("unknown x transformer name: {0}".format(name))
     exit(1)
+#----------catboost_model----------
+
+class ClassboostModel:
+    def __init__(self, config):
+        self.log = logging.getLogger("ClassboostModel")
+        self.log.info("model config: {0}".format(config))
+        self.config = config
+        self.model = cb.CatBoostClassifier(
+                #logging_level="Silent",
+                loss_function=self.config["loss_function"],
+                #classes_count=2,
+                iterations=self.config["iterations"],
+                #l2_leaf_reg=self.config["l2_leaf_reg"],
+                learning_rate=self.config["learning_rate"],
+                depth=self.config["depth"],
+                class_weights=[ 0.1, 0.9 ]
+                #thread_count=19
+        )
+        self.log.info("inited")
+
+    def load_train_data(self, x_train, y_train):
+        self.log.info("load x_train size: {0} y_train size: {1}".format(len(x_train), len(y_train)))
+        self.model.fit(x_train, y_train)
+        self.log.info("loaded")
+
+    def predict(self, x_to_predict):
+        self.log.info("predict x_to_predict size: {0}".format(len(x_to_predict)))
+        prediction = self.model.predict(x_to_predict)
+        self.log.info("predicted")
+        return prediction.reshape(-1,)
 
 #----------DummyModel----------
 
@@ -375,6 +417,8 @@ def model_by_config(config):
         return LinearSVCModel(model_config)
     if (name == "regboost"):
         return RegboostModel(model_config)
+    if (name == "classboost"):
+        return ClassboostModel(model_config)
     logging.fatal("unknown model name: {0}".format(name))
 
 #----------RegboostSVCModel----------
@@ -407,15 +451,8 @@ class RegboostModel:
         self.log.info("inited")
 
     def load_train_data(self, x_train, y_train):
-        print(x_train)
-        self.log.info("load x_train size: {0} y_train size: {1}".format(x_train.shape[0], len(y_train)))
+        self.log.info("load x_train size: {0} y_train size: {1}".format(len(x_train), len(y_train)))
         self.model.fit(x_train, y_train)
-        self.log.info("loaded")
-        """
-        for i in range(150):
-            print(i, self.model.feature_importances_[i])
-        exit()
-        """
         self.log.info("loaded")
 
     def predict(self, x_to_predict):
@@ -427,10 +464,8 @@ class RegboostModel:
 
     def round_prediction(self, prediction):
         result = [0] * len(prediction)
-        sort_ind = np.argsort(prediction)
-
-        for i in range(len(sort_ind)):
-            result[sort_ind[i]] = int(i / len(sort_ind) * 21)
+        for i in range(len(prediction)):
+            result[i] = 0 if prediction[i] < -1 else 1
         return result
 #----------config----------
 config = json.loads("""
@@ -439,8 +474,8 @@ config = json.loads("""
     "x_known": "../input/train.csv",
     "y_known": "../input/train.csv",
     "x_to_predict": "../input/test.csv",
-    "known_using_part" : 0.01,
-    "train_part": 0.8
+    "known_using_part" : 1,
+    "train_part": 0.5
   },
   "embedding_provider": {
     "glove_path": "../input/embeddings/glove.840B.300d/glove.840B.300d.txt",
@@ -451,8 +486,17 @@ config = json.loads("""
     "name": "w2v"
   },
   "model": {
-    "name": "regboost",
+    "name": "classboost",
     "iterations": 1000,
+    "depth": 5,
+    "learning_rate": 0.3,
+    "l2_leaf_reg":0.07,
+    "loss_function": "MultiClassOneVsAll",
+    "classes_count": 2
+  },
+  "model2": {
+    "name": "regboost",
+    "iterations": 100,
     "depth": 8,
     "learning_rate": 0.2,
     "l2_leaf_reg":0.07,
@@ -467,11 +511,36 @@ config = json.loads("""
 
 def calculate_and_print_test_score(data_provider, x_transformer, model, config):
     test_prediction = model.predict(x_transformer.transform(data_provider.x_test))
-    test_score = ratio_score(test_prediction, data_provider.y_test)
+    false_positive, false_negative = false_positive_negative_score(data_provider.y_test, test_prediction)
+    total_positive = 0
+    total_negative = 0
+    predicted_positive = 0
+    predicted_negative = 0
+    for i in range(len(data_provider.y_test)):
+        x = data_provider.y_test[i]
+        if x == 1:
+            total_negative += 1
+            if (x == test_prediction[i]):
+                predicted_negative += 1
+        else:
+            total_positive += 1
+            if (x == test_prediction[i]):
+                predicted_positive += 1
+    acc_positive = predicted_positive / (predicted_positive + false_positive)
+    acc_negative = predicted_negative / (predicted_negative + false_negative)
+    acc = (acc_negative + acc_positive) / 2
+
+    rec_positive = predicted_positive / (predicted_positive + false_negative)
+    rec_negative = predicted_negative / (predicted_negative + false_positive)
+    rec = (rec_negative + rec_positive) / 2
+
+    f_score = (rec * acc) / (rec + acc) * 2
     print("************************")
-    print("test_score:", test_score)
+    print("predicted_positive:", predicted_positive, "/", total_positive)
+    print("predicted_negative:", predicted_negative, "/", total_negative)
+    print("F score: ", f_score)
     print("************************")
-    score_file = open('scores/' + str(test_score), 'w')
+    score_file = open(str(f_score), 'w')
     score_file.write(str(json.dumps(config)))
 
 log = logging.getLogger("Launcher")
@@ -482,17 +551,17 @@ log.info("launcher config: {0}".format(config))
 data_provider = DataProvider(config["data_provider"])
 
 x_transformer = x_transformer_by_config(config)
-seq, words, lemmas = x_transformer.generate_words_and_lemmas(data_provider.x_known)
+code_by_word, lemma_by_word = x_transformer.generate_words_and_lemmas(np.concatenate((data_provider.x_known, data_provider.x_to_predict)))
 
 embedding_provider = EmbeddingProvider(config["embedding_provider"])
-embedding_matrix = embedding_provider.generate_embedding_matrix(words, lemmas)
+embedding_matrix = embedding_provider.generate_embedding_matrix(code_by_word, lemma_by_word)
 
-exit()
+log.info("embedding_matrix generated with shape: {}".format(embedding_matrix.shape))
 
+
+x_transformer.load_train_data(embedding_matrix)
 
 model = model_by_config(config)
-
-x_transformer.load_train_data(data_provider.x_train, data_provider.y_train)
 model.load_train_data(x_transformer.transform(data_provider.x_train), data_provider.y_train)
 
 calculate_and_print_test_score(data_provider, x_transformer, model, config)
@@ -503,5 +572,5 @@ answer_file = open(config["answer_file"], 'w')
 answer_file.write("qid,prediction\n")
 
 for i in range(len(prediction)):
-    answer_file.write("%s,%s\n" % (data_provider.x_to_predict_ids[i], prediction[i]))
+    answer_file.write("%s,%s\n" % (data_provider.x_to_predict_ids[i], int(prediction[i])))
 

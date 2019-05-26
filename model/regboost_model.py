@@ -38,15 +38,8 @@ class RegboostModel:
         self.log.info("inited")
 
     def load_train_data(self, x_train, y_train):
-        print(x_train)
-        self.log.info("load x_train size: {0} y_train size: {1}".format(x_train.shape[0], len(y_train)))
+        self.log.info("load x_train size: {0} y_train size: {1}".format(len(x_train), len(y_train)))
         self.model.fit(x_train, y_train)
-        self.log.info("loaded")
-        """
-        for i in range(150):
-            print(i, self.model.feature_importances_[i])
-        exit()
-        """
         self.log.info("loaded")
 
     def predict(self, x_to_predict):
@@ -58,8 +51,6 @@ class RegboostModel:
 
     def round_prediction(self, prediction):
         result = [0] * len(prediction)
-        sort_ind = np.argsort(prediction)
-
-        for i in range(len(sort_ind)):
-            result[sort_ind[i]] = int(i / len(sort_ind) * 21)
+        for i in range(len(prediction)):
+            result[i] = 0 if prediction[i] < -1 else 1
         return result

@@ -21,11 +21,36 @@ config = json.load(config_file)
 
 def calculate_and_print_test_score(data_provider, x_transformer, model, config):
     test_prediction = model.predict(x_transformer.transform(data_provider.x_test))
-    test_score = ratio_score(test_prediction, data_provider.y_test)
+    false_positive, false_negative = false_positive_negative_score(data_provider.y_test, test_prediction)
+    total_positive = 0
+    total_negative = 0
+    predicted_positive = 0
+    predicted_negative = 0
+    for i in range(len(data_provider.y_test)):
+        x = data_provider.y_test[i]
+        if x == 1:
+            total_negative += 1
+            if (x == test_prediction[i]):
+                predicted_negative += 1
+        else:
+            total_positive += 1
+            if (x == test_prediction[i]):
+                predicted_positive += 1
+    acc_positive = predicted_positive / (predicted_positive + false_positive)
+    acc_negative = predicted_negative / (predicted_negative + false_negative)
+    acc = (acc_negative + acc_positive) / 2
+
+    rec_positive = predicted_positive / (predicted_positive + false_negative)
+    rec_negative = predicted_negative / (predicted_negative + false_positive)
+    rec = (rec_negative + rec_positive) / 2
+
+    f_score = (rec * acc) / (rec + acc) * 2
     print("************************")
-    print("test_score:", test_score)
+    print("predicted_positive:", predicted_positive, "/", total_positive)
+    print("predicted_negative:", predicted_negative, "/", total_negative)
+    print("F score: ", f_score)
     print("************************")
-    score_file = open('scores/' + str(test_score), 'w')
+    score_file = open(str(f_score), 'w')
     score_file.write(str(json.dumps(config)))
 
 log = logging.getLogger("Launcher")
@@ -36,17 +61,17 @@ log.info("launcher config: {0}".format(config))
 data_provider = DataProvider(config["data_provider"])
 
 x_transformer = x_transformer_by_config(config)
-seq, words, lemmas = x_transformer.generate_words_and_lemmas(data_provider.x_known)
+code_by_word, lemma_by_word = x_transformer.generate_words_and_lemmas(np.concatenate((data_provider.x_known, data_provider.x_to_predict)))
 
 embedding_provider = EmbeddingProvider(config["embedding_provider"])
-embedding_matrix = embedding_provider.generate_embedding_matrix(words, lemmas)
+embedding_matrix = embedding_provider.generate_embedding_matrix(code_by_word, lemma_by_word)
 
-exit()
+log.info("embedding_matrix generated with shape: {}".format(embedding_matrix.shape))
 
+
+x_transformer.load_train_data(embedding_matrix)
 
 model = model_by_config(config)
-
-x_transformer.load_train_data(data_provider.x_train, data_provider.y_train)
 model.load_train_data(x_transformer.transform(data_provider.x_train), data_provider.y_train)
 
 calculate_and_print_test_score(data_provider, x_transformer, model, config)
@@ -57,5 +82,5 @@ answer_file = open(config["answer_file"], 'w')
 answer_file.write("qid,prediction\n")
 
 for i in range(len(prediction)):
-    answer_file.write("%s,%s\n" % (data_provider.x_to_predict_ids[i], prediction[i]))
+    answer_file.write("%s,%s\n" % (data_provider.x_to_predict_ids[i], int(prediction[i])))
 

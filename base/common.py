@@ -25,6 +25,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
+from itertools import chain
 
 from nltk.stem import PorterStemmer
 from nltk.stem.lancaster import LancasterStemmer
@@ -69,3 +70,15 @@ def ratio_score(y_expected, y_predicted):
             bad_cnt += 1
         total += 1
     return (total - bad_cnt) / total
+
+def false_positive_negative_score(y_expected, y_predicted):
+    false_positive = 0
+    false_negative = 0
+    for i in range(len(y_predicted)):
+        if (y_expected[i] != y_predicted[i]):
+            if (y_predicted[i] == 1):
+                false_negative += 1
+            else:
+                false_positive += 1
+    return false_positive, false_negative
+

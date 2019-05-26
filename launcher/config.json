@@ -3,8 +3,8 @@
     "x_known": "../input/train.csv",
     "y_known": "../input/train.csv",
     "x_to_predict": "../input/test.csv",
-    "known_using_part" : 0.01,
-    "train_part": 0.8
+    "known_using_part" : 1,
+    "train_part": 0.5
   },
   "embedding_provider": {
     "glove_path": "../input/embeddings/glove.840B.300d/glove.840B.300d.txt",
@@ -15,8 +15,17 @@
     "name": "w2v"
   },
   "model": {
-    "name": "regboost",
+    "name": "classboost",
     "iterations": 1000,
+    "depth": 5,
+    "learning_rate": 0.3,
+    "l2_leaf_reg":0.07,
+    "loss_function": "MultiClassOneVsAll",
+    "classes_count": 2
+  },
+  "model2": {
+    "name": "regboost",
+    "iterations": 100,
     "depth": 8,
     "learning_rate": 0.2,
     "l2_leaf_reg":0.07,
